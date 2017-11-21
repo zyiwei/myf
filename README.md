@@ -42,7 +42,7 @@ $source venv/bin/activate
 
 (venv)$export FLASKY_ADMIN=<管理员邮箱>
 
-(venv)$export MAIL_SENDER=<服务器发送邮件邮箱>
+(venv)$export FLASKY_MAIL_SENDER=<服务器发送邮件邮箱>
 
 #### 5.网站初始账户
 #####（1)管理员账户：
