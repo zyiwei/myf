@@ -23,9 +23,9 @@ $sudo easy_install virtualenv
 #### 2.下载Github代码
 $git clone https://github.com/miguelgrinberg/myf.git
 
-#### 3.在flasky文件夹中创建虚拟环境
+#### 3.在myf_master文件夹中创建虚拟环境
 进入下载的文件目录:
-$cd myflasky_end
+$cd myf_master
 
 将创建的虚拟环境命名为venv:
 $virtualenv venv
