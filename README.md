@@ -52,3 +52,6 @@ $source venv/bin/activate
     邮箱：mod2@example.com 密码：mod2
     ......
     邮箱：mod3@example.com 密码：mod6
+
+#### 6.运行程序
+(venv)$python manage.py
