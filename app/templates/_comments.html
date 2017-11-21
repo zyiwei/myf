@@ -1,0 +1,65 @@
+<ul class="comments">
+	{% for comment in comments %}
+	<li class="comment">
+		<div class="comment-thumbnail">
+			<a href="{{ url_for('.user',username=comment.author.username) }}">
+				{% if comment.author.avatar %}
+				<img class="img-rounded profile-thumbnail" width="40" src="{{ comment.author.avatar }}">
+				{% else %}
+				<img class="img-rounded profile-thumbnail" width="40" src="/static/avatar/feifei.jpeg">
+				{% endif %}
+			</a> 
+		</div> 
+ 
+		<div class="comment-content">
+			<div class="comment-date">{{ moment(comment.timestamp).fromNow() }}</div>
+			<div class="comment-author"><a href="{{ url_for('.user',username=comment.author.username) }}">{{ comment.author.username }}</a></div>
+
+			<div class="comment-body">
+				{% if comment.has_reply() %}
+				--------------------------------------------<br/>
+				<div>
+					{% if comment.followed.first().followed.disabled %}
+					<p><i>This comment has been disabled by a moderator.</i></p>
+					{% endif %}
+					{% if moderate or not comment.followed.first().followed.disabled %}
+						{% if comment.followed.first().followed.body_html %}
+							{{ comment.followed.first().followed.body_html | safe }}
+						{% else %}
+							{{ comment.followed.first().followed.body }}
+						{% endif %}
+					{% endif %}
+				</div>
+				<br/>--------------------------------------------<br/>
+				{% endif %}
+				
+				{% if comment.disabled %}
+				<p><i>This comment has been disabled by a moderator.</i></p>
+				{% endif %}
+				{% if moderate or not comment.disabled %}
+					{% if comment.body_html %}
+						{{ comment.body_html | safe }}
+					{% else %}
+						{{ comment.body }}
+					{% endif %}
+				{% endif %}
+			</div>
+			{% if moderate %}
+				<br>
+				{% if comment.disabled %}
+				<a class="btn btn-default btn-xs" href="{{ url_for('.moderate_enable',id=comment.id,page=page) }}">取消隐藏[Enable]</a>
+				{% else %}
+				<a class="btn btn-danger btn-xs" href="{{ url_for('.moderate_disable',id=comment.id,page=page) }}">隐藏[Disable]</a>
+				{% endif %}
+			{% endif %}
+			{% if current_user.is_authenticated %}
+				<br>
+				{% if not comment.disabled %}
+				<a class="btn btn-default btn-xs" href="{{
+				url_for('.reply',id=comment.id,page=page) }}">回复：[reply]</a>
+				{% endif %}
+			{% endif %}
+		</div>
+	</li>
+	{% endfor %}
+</ul>
