@@ -7,7 +7,8 @@
 <div class="page-header">
     <h1>{{ username }}</h1>
 </div>
-{% set moderate =False %}
+{% set moderate = False %}
+{% set able=True %}
 {% include '_comments.html' %}
 
 {% if pagination %}
