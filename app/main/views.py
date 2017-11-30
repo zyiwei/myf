@@ -192,6 +192,7 @@ def edit(id):
 	form.header.data=post.header
 	form.summary.data=post.summary
 	form.body.data=post.body
+	post.readcount=post.readcount+1
 	return render_template('edit_post.html',form=form)
 
 
