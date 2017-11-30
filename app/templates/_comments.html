@@ -16,18 +16,23 @@
 			<div class="comment-author"><a href="{{ url_for('.user',username=comment.author.username) }}">{{ comment.author.username }}</a></div>
 
 			<div class="comment-body">
-				{% if comment.has_reply() %}
+				{% if comment.has_reply() or comment.has_replyed %}
 				--------------------------------------------<br/>
 				<div>
-					{% if comment.followed.first().followed.disabled %}
-					<p><i>This comment has been disabled by a moderator.</i></p>
-					{% endif %}
-					{% if moderate or not comment.followed.first().followed.disabled %}
-						{% if comment.followed.first().followed.body_html %}
-							{{ comment.followed.first().followed.body_html | safe }}
-						{% else %}
-							{{ comment.followed.first().followed.body }}
+					{% if comment.followed.first() %}
+						{% if comment.followed.first().followed.disabled %}
+						<p><i>该评论已被协管员屏蔽/This comment has been disabled by a moderator.</i></p>
 						{% endif %}
+						{% if moderate or not comment.followed.first().followed.disabled %}
+							{% if comment.followed.first().followed.body_html %}
+								{{ comment.followed.first().followed.body_html | safe }}
+							{% else %}
+								{{ comment.followed.first().followed.body }}
+							{% endif %}
+						{% endif %}
+					{% endif %}
+					{% if comment.followed.first() is none and comment.has_replyed %}
+					<p><i>该评论已被协管员删除/This comment has been deleted by a moderator.</i></p>
 					{% endif %}
 				</div>
 				<br/>--------------------------------------------<br/>
@@ -51,6 +56,7 @@
 				{% else %}
 				<a class="btn btn-danger btn-xs" href="{{ url_for('.moderate_disable',id=comment.id,page=page) }}">隐藏[Disable]</a>
 				{% endif %}
+				<a class="btn btn-danger btn-xs" href="{{ url_for('.delete_comment',id=comment.id,page=page) }}">删除[Delete]</a>
 			{% endif %}
 			{% if current_user.is_authenticated %}
 				<br>
