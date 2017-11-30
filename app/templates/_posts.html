@@ -18,10 +18,14 @@
 				</a>
 			</div>
 			<div class="post-body">
-				{% if post.body_html %}
-					{{ post.body_html | safe }}
-				{% else %}
-					{{ post.body }}
+				<h4>{{ post.header }}</h4>
+				<p>{{ post.summary }}</p>
+				{% if if_body==1 %}
+					{% if post.body_html %}
+						{{ post.body_html | safe }}
+					{% else %}
+						{{ post.body }}
+					{% endif %}
 				{% endif %}
 			</div>
 			<div class="post-footer">
@@ -32,9 +36,15 @@
 				<a href="{{ url_for('.edit',id=post.id) }}">
 					<span class="label label-primary">编辑[Edit]</span>
 				</a>
+				<a href="{{ url_for('.delete_post',id=post.id) }}">
+					<span class="label label-danger">删除[Delete]</span>
+				</a>
 				{% elif current_user.is_administrator() %}
 				<a href="{{ url_for('.edit',id=post.id) }}">
 					<span class="label label-danger">编辑 - 管理员[Edit - Admin]</span>
+				</a>
+				<a href="{{ url_for('.delete_post',id=post.id) }}">
+					<span class="label label-danger">删除 - 管理员[Delete]</span>
 				</a>
 				{% endif %}
 				<a href="{{ url_for('.post',id=post.id) }}#comments">
