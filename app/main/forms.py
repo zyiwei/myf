@@ -37,16 +37,18 @@ class EditProfileAdminForm(Form):
 
 	def validate_email(self,field):
 		if field.data!=self.user.email and User.query.filter_by(email=field.data).first():
-			raise ValidationError('Email already registered!')
+			raise ValidationError('邮箱已注册/Email already registered!')
 
 	def validate_username(self,field):
 		if field.data!=self.user.username and User.query.filter_by(username=field.data).first():
-			raise ValidationError('Email already in use!')
+			raise ValidationError('此邮箱地址已被使用/Email already in use!')
 
 
 
 class PostForm(Form):
-	body=PageDownField("发布消息:",validators=[Required()])
+	header=StringField("题目:",validators=[Required(),Length(1,50)])
+	summary=StringField("摘要:",validators=[Required(),Length(1,200)])
+	body=PageDownField("内容:",validators=[Required()])
 	submit=SubmitField('Submit/提交')
 
 
