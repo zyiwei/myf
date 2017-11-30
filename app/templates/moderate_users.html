@@ -13,17 +13,17 @@
 	<tr>
 		<td>
 			<a href="{{ url_for('.user',username=user.username) }}">
-				{% if user.avatar %}
-				<img class="img-rounded profile-thumbnail" width="32" src="{{ user.avatar }}">
+				{% if user.avatar is not none %}
+				<img class="img-rounded profile-thumbnail" width="28" src="{{ user.avatar }}">
 				{% else %}
-				<img class="img-rounded profile-thumbnail" width="32" src="/static/avatar/feifei.jpeg">
+				<img class="img-rounded profile-thumbnail" width="28" src="/static/avatar/feifei.jpeg">
 				{% endif %}
 			</a>
 		</td>
 		<td>
 			<a href="{{ url_for('.user',username=user.username) }}">
 				{{ user.username }}
-			</a>
+			</a> 
 		</td>
 		<td>{{ user.role }}</td>
 		<td>{{ moment(user.timestamp).format('L') }}</td>
