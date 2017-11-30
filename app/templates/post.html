@@ -5,9 +5,11 @@
 {% block title %}Flasky - 信息【Post】{% endblock %}
 
 {% block page_content %}
+{% set if_body=1 %}
 {% include '_posts.html' %}
+{% set if_body=0 %}
 
-<h4 id="comments">反馈【Comments】:</h4>
+<h4 id="comments">评论【Comments】:</h4>
 {% if current_user.can(Permission.COMMENT) %}
 <div class="comment-form">
 	{{ wtf.quick_form(form) }}
