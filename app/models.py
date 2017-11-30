@@ -12,8 +12,8 @@ import hashlib
 from markdown import markdown
 import bleach
 from app.exceptions import ValidationError
-
  
+  
 class Permission:
 	FOLLOW=0x01
 	COMMENT=0x02
@@ -22,11 +22,22 @@ class Permission:
 	ADMINISTER=0x80
 
 
+
+
 class Follow(db.Model):
 	__tablename__='follows'
 	follower_id=db.Column(db.Integer,db.ForeignKey('users.id'),primary_key=True)
 	followed_id=db.Column(db.Integer,db.ForeignKey('users.id'),primary_key=True)
 	timestamp=db.Column(db.DateTime,default=datetime.utcnow)
+
+
+
+class FollowComments(db.Model):
+    __tablename__='follow_comments'
+    follower_id=db.Column(db.Integer,db.ForeignKey('comments.id'),primary_key=True)
+    followed_id=db.Column(db.Integer,db.ForeignKey('comments.id'),primary_key=True)
+    timestamp=db.Column(db.DateTime,default=datetime.utcnow)
+
 
 
 
@@ -65,6 +76,82 @@ class Role(db.Model):
 
 
 
+
+class Comment(db.Model):
+    __tablename__='comments'
+    id=db.Column(db.Integer,primary_key=True)
+    body=db.Column(db.Text)
+    body_html=db.Column(db.Text)
+    timestamp=db.Column(db.DateTime,index=True,default=datetime.utcnow)
+    disabled=db.Column(db.Boolean)
+    has_replyed=db.Column(db.Boolean,default=False)
+    author_id=db.Column(db.Integer,db.ForeignKey('users.id'))
+    post_id=db.Column(db.Integer,db.ForeignKey('posts.id'))
+    reply_id=db.Column(db.Integer,db.ForeignKey('users.id'))
+    author=db.relationship('User', back_populates='userComments',foreign_keys=[author_id])
+    replyer=db.relationship('User',back_populates='replyComments',foreign_keys=[reply_id])
+    followed=db.relationship('FollowComments',
+        foreign_keys=[FollowComments.follower_id],
+        backref=db.backref('follower',lazy='joined'),
+        lazy='dynamic',cascade='all,delete-orphan')
+    followers=db.relationship('FollowComments',
+        foreign_keys=[FollowComments.followed_id],
+        backref=db.backref('followed',lazy='joined'),
+        lazy='dynamic',
+        cascade='all,delete-orphan')
+
+
+    def has_reply(self):
+        if self.followed.count()==0:
+            return False
+        else:
+            self.has_replyed=True
+            return True
+
+    def __init__(self,**kwargs):
+        super(Comment,self).__init__(**kwargs)
+        self.has_reply()
+
+
+    def follow(self,comment):
+        f = FollowComments(follower=self, followed=comment)
+        self.replyer=comment.author
+        db.session.add(f)
+
+    def unfollow(self):
+        f=self.followed.first()
+        if f:
+            db.session.delete(f)
+
+    def delete_all_followers(self):
+        if self.followers.count()!=0:
+            for follower in self.followers:
+                db.session.delete(follower)
+
+    def delete(self):
+        self.unfollow()
+        self.delete_all_followers()
+
+
+    @staticmethod
+    def on_change_body(target,value,oldvalue,initiator):
+        allowed_tags=['a','abbr','acronym','b','code','em','i','strong']
+        target.body_html=bleach.linkify(bleach.clean(markdown(value,output_format='html'),tags=allowed_tags,strip=True))
+
+    def to_json(self):
+        json_post={
+            'url':url_for('api.get_comment',id=self.id,_external=True),
+            'body':self.body,
+            'body_html':self.body_html,
+            'timestamp':self.timestamp,
+            'author':url_for('api.get_user',id=self.author_id,_external=True)
+        }
+        return json_post
+
+
+
+
+
 class User(UserMixin, db.Model):
     __tablename__ = 'users'
     id = db.Column(db.Integer, primary_key=True)
@@ -90,7 +177,8 @@ class User(UserMixin, db.Model):
                                 backref=db.backref('followed', lazy='joined'),
                                 lazy='dynamic',
                                 cascade='all, delete-orphan')
-    comments = db.relationship('Comment', backref='author', lazy='dynamic')
+    userComments=db.relationship('Comment',back_populates='author',foreign_keys=[Comment.author_id])
+    replyComments=db.relationship('Comment',back_populates='replyer',foreign_keys=[Comment.reply_id])
 
     @staticmethod
     def generate_fake(count=100):
@@ -268,116 +356,76 @@ class AnonymousUser(AnonymousUserMixin):
 
 
 class Post(db.Model):
-	__tablename__='posts'
-	id=db.Column(db.Integer,primary_key=True)
-	body=db.Column(db.Text)
-	timestamp=db.Column(db.DateTime,index=True,default=datetime.utcnow)
-	author_id=db.Column(db.Integer,db.ForeignKey('users.id'))
-	body_html=db.Column(db.Text)
-	comments=db.relationship('Comment',backref='post',lazy='dynamic')
-	role_id=db.Column(db.Integer,db.ForeignKey('roles.id'))
-
-	@staticmethod
-	def generate_fake(count=100):
-		from random import seed,randint
-		import forgery_py
-
-		seed()
-		user_count=User.query.count()
-		for i in range(count):
-			u=User.query.offset(randint(0,user_count-1)).first()
-			p=Post(body=forgery_py.lorem_ipsum.sentences(randint(1,3)),
-				timestamp=forgery_py.date.date(True),
-				author=u,
-				role=u.role)
-			db.session.add(p)
-			db.session.commit()
-
-	@staticmethod
-	def on_changed_body(target,value,oldvalue,initiator):
-		allowed_tags=['a','abbr','acronym','b','blockquote','code','em','i','li','ol','pre','strong','ul','h1','h2','h3','p']
-		target.body_html=bleach.linkify(bleach.clean(markdown(value,output_format='html'),tags=allowed_tags,strip=True))
-
-	@staticmethod
-	def add_self_follows():
-		for user in User.query.all():
-			if not user.is_following(user):
-				user.follow(user)
-				db.session.add(user)
-				db.session.commit()
-
-	def to_json(self):
-		json_post={
-			'url':url_for('api.get_post',id=self.id,_external=True),
-			'body':self.body,
-			'body_html':self.body_html,
-			'timestamp':self.timestamp,
-			'author':url_for('api.get_user',id=self.author_id,_external=True),
-			'comments':url_for('api.get_post_comments',id=self.id,_external=True),
-			'comment_count':self.comments.count()
-		}
-		return json_post
-
-	@staticmethod
-	def from_json(json_post):
-		body=json_post.get('body')
-		if body is None or body=='':
-			raise ValidationError('post dose not have a body')
-		return Post(body=body)
-
-
-
-class FollowComments(db.Model):
-    __tablename__='follow_comments'
-    follower_id=db.Column(db.Integer,db.ForeignKey('comments.id'),primary_key=True)
-    followed_id=db.Column(db.Integer,db.ForeignKey('comments.id'),primary_key=True)
-    timestamp=db.Column(db.DateTime,default=datetime.utcnow)
-
-
-
-class Comment(db.Model):
-    __tablename__='comments'
+    __tablename__='posts'
     id=db.Column(db.Integer,primary_key=True)
+    header=db.Column(db.Text)
+    summary=db.Column(db.Text)
     body=db.Column(db.Text)
-    body_html=db.Column(db.Text)
     timestamp=db.Column(db.DateTime,index=True,default=datetime.utcnow)
-    disabled=db.Column(db.Boolean)
     author_id=db.Column(db.Integer,db.ForeignKey('users.id'))
-    post_id=db.Column(db.Integer,db.ForeignKey('posts.id'))
-    followed=db.relationship('FollowComments',
-        foreign_keys=[FollowComments.follower_id],
-        backref=db.backref('follower',lazy='joined'),
-        lazy='dynamic',cascade='all,delete-orphan')
-    followers=db.relationship('FollowComments',
-        foreign_keys=[FollowComments.followed_id],
-        backref=db.backref('followed',lazy='joined'),
-        lazy='dynamic',
-        cascade='all,delete-orphan')
-
-    def has_reply(self):
-        if self.followed.count()==0:
-            return False
-        else:
-            return True
-
-    def follow(self,comment):
-        f = FollowComments(follower=self, followed=comment)
-        db.session.add(f)
+    body_html=db.Column(db.Text)
+    readcount=db.Column(db.Integer,default=0)
+    comments=db.relationship('Comment',backref='post',lazy='dynamic')
+    role_id=db.Column(db.Integer,db.ForeignKey('roles.id'))
 
     @staticmethod
-    def on_change_body(target,value,oldvalue,initiator):
-        allowed_tags=['a','abbr','acronym','b','code','em','i','strong']
+    def generate_fake(count=100):
+        from random import seed,randint
+        import forgery_py
+
+        seed()
+        user_count=User.query.count()
+        for i in range(count):
+            u=User.query.offset(randint(0,user_count-1)).first()
+            p=Post(header=forgery_py.lorem_ipsum.sentences(randint(1,3)),
+                summary=forgery_py.lorem_ipsum.sentences(randint(1,3)),
+                body=forgery_py.lorem_ipsum.sentences(randint(1,3)),
+                timestamp=forgery_py.date.date(True),
+                author=u,
+                role=u.role)
+            db.session.add(p)
+            db.session.commit()
+ 
+    @staticmethod
+    def on_changed_body(target,value,oldvalue,initiator):
+        allowed_tags=['a','abbr','acronym','b','blockquote','code','em','i','li','ol','pre','strong','ul','h1','h2','h3','p']
         target.body_html=bleach.linkify(bleach.clean(markdown(value,output_format='html'),tags=allowed_tags,strip=True))
+
+    @staticmethod
+    def add_self_follows():
+        for user in User.query.all():
+            if not user.is_following(user):
+                user.follow(user)
+                db.session.add(user)
+                db.session.commit()
+
+    def delete(self):
+        if self.comments.count()!=0:
+            for comment in self.comments.all():
+                comment.delete()
+                db.session.delete(comment)
+                db.session.commit()
 
     def to_json(self):
         json_post={
-            'url':url_for('api.get_comment',id=self.id,_external=True),
+            'url':url_for('api.get_post',id=self.id,_external=True),
+            'header':self.header,
+            'summary':self.summary,
             'body':self.body,
             'body_html':self.body_html,
             'timestamp':self.timestamp,
-            'author':url_for('api.get_user',id=self.author_id,_external=True)
+            'author':url_for('api.get_user',id=self.author_id,_external=True),
+            'comments':url_for('api.get_post_comments',id=self.id,_external=True),
+            'comment_count':self.comments.count()
         }
         return json_post
+
+    @staticmethod
+    def from_json(json_post):
+        body=json_post.get('body')
+        if body is None or body=='':
+            raise ValidationError('post dose not have a body')
+        return Post(body=body)
 
 
 
