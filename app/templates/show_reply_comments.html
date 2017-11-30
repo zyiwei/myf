@@ -12,7 +12,7 @@
 
 {% if pagination %}
 <div class="pagination">
-    {{ macros.pagination_widget(pagination,'.moderate') }}
+    {{ macros.pagination_widget(pagination,'.replyComments',username=username) }}
 </div>
 {% endif %}
 {% endblock %}
