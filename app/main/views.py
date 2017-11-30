@@ -34,12 +34,14 @@ def server_shutdown():
 def index():
 	form=PostForm()
 	if current_user.can(Permission.WRITE_ARTICLES) and form.validate_on_submit():
-		post=Post(body=form.body.data,author=current_user._get_current_object(),role=current_user.role)
+		post=Post(header=form.header.data,summary=form.summary.data,body=form.body.data,author=current_user._get_current_object(),role=current_user.role)
 		db.session.add(post)
 		return redirect(url_for('.index'))
 	show_followed='0'
 	if current_user.is_authenticated:
 		show_followed=request.cookies.get('show_followed')
+	else:
+		query=Post.query
 	if show_followed=='1':
 		query=current_user.followed_posts
 	elif show_followed=='2':
@@ -61,15 +63,14 @@ def index():
 @login_required
 def replyComments(username):
 	user=User.query.filter_by(username=username).first()
-	comments=Comment.query.filter_by(author_id=user.id)
-	answers=[]
-	for comment in comments:
-		if comment.followers.first():
-			for followers in comment.followers.all():
-				follower=followers.follower
-				answers.append(follower)
-
-	return render_template('show_reply_comments.html',username=username,comments=answers)
+	if user:
+		query=Comment.query.filter_by(reply_id=user.id)
+		page=request.args.get('page',1,type=int)
+		pagination=query.order_by(Comment.timestamp.desc()).paginate(page,per_page=current_app.config['FLASKY_COMMENTS_PER_PAGE'],error_out=False)
+		comments=pagination.items
+		return render_template('show_reply_comments.html',username=username,comments=comments,pagination=pagination)
+	else:
+		abort(404)
 
 
 
@@ -78,8 +79,11 @@ def user(username):
 	user=User.query.filter_by(username=username).first()
 	if user is None:
 		abort(404)
-	posts=user.posts.order_by(Post.timestamp.desc()).all()
-	return render_template('user.html',user=user,posts=posts)
+	page=request.args.get('page',1,type=int)
+	pagination=Post.query.filter_by(author_id=user.id).order_by(Post.timestamp.desc()).paginate(page,per_page=current_app.config['FLASKY_POSTS_PER_PAGE'],error_out=False)
+	posts=pagination.items
+	return render_template('user.html',user=user,posts=posts,pagination=pagination)
+
 
 
 @main.route('/edit-profile',methods=['GET','POST'])
@@ -159,7 +163,7 @@ def post(id):
 	if form.validate_on_submit():
 		comment=Comment(body=form.body.data,post=post,author=current_user._get_current_object())
 		db.session.add(comment)
-		flash('Your comment has been published.')
+		flash('您的评论已成功发表/Your comment has been published.')
 		return redirect(url_for('.post',id=post.id,page=-1))
 	page=request.args.get('page',1,type=int)
 	if page==-1:
@@ -167,6 +171,7 @@ def post(id):
 	pagination=post.comments.order_by(Comment.timestamp.asc()).paginate(page,
 		per_page=current_app.config['FLASKY_POSTS_PER_PAGE'],error_out=False)
 	comments=pagination.items
+	post.readcount=post.readcount+1
 	return render_template('post.html',posts=[post],form=form,comments=comments,pagination=pagination)
 
 
@@ -178,10 +183,15 @@ def edit(id):
 		abort(403)
 	form=PostForm()
 	if form.validate_on_submit():
+		post.header=form.header.data
+		post.summary=form.summary.data
 		post.body=form.body.data
 		db.session.add(post)
-		flash('The post has been updated.')
+		flash('文章已更新/The post has been updated.')
 		return redirect(url_for('.post',id=post.id))
+	form.header.data=post.header
+	form.summary.data=post.summary
+	form.body.data=post.body
 	return render_template('edit_post.html',form=form)
 
 
@@ -286,7 +296,7 @@ def show_comments(username):
 	user=User.query.filter_by(username=username).first()
 	if user is None:
 		abort(404)
-	comments=user.comments.order_by(Comment.timestamp.desc()).all()
+	comments=Comment.query.filter_by(author_id=user.id).order_by(Comment.timestamp.desc()).all()
 	return render_template('user_comments.html',user=user,comments=comments)
 
 
@@ -319,8 +329,29 @@ def moderate_disable(id):
 	comment.disabled=True
 	db.session.add(comment)
 	return redirect(url_for('.moderate',page=request.args.get('page',1,type=int)))
-
  
+@main.route('/delete-comment/<int:id>')
+@login_required
+@permission_required(Permission.MODERATE_COMMENTS)
+def delete_comment(id):
+	comment=Comment.query.get_or_404(id)
+	comment.delete()
+	db.session.delete(comment)
+	db.session.commit()
+	flash('该评论已被删除！')
+	return redirect(url_for('.moderate',page=request.args.get('page',1,type=int)))
+
+@main.route('/delete-post/<int:id>')
+@login_required
+def delete_post(id):
+	post=Post.query.get_or_404(id)
+	post.delete()
+	db.session.delete(post)
+	db.session.commit()
+	flash('该文章已被删除！')
+	return redirect(url_for('.index'))
+
+
 
 @main.route('/reply/<int:id>',methods=['GET','POST'])
 @login_required
@@ -333,8 +364,10 @@ def reply(id):
 	if form.validate_on_submit():
 		reComment=Comment(body=form.body.data,post=post,author=current_user._get_current_object())
 		reComment.follow(comment)
+		reComment.reply_id=comment.author_id
 		db.session.add(reComment)
 		flash('您的回复已成功发表！')
+		post.readcount=post.readcount+1
 		return redirect(url_for('.post',id=post.id,page=-1))
 	return render_template('reply.html',form=form,author=author)
 
@@ -346,9 +379,9 @@ def reply(id):
 def moderate_users():
 	page=request.args.get('page',1,type=int)
 	pagination=User.query.paginate(page,
-		per_page=current_app.config['FLASKY_POSTS_PER_PAGE'],
+		per_page=current_app.config['FLASKY_USERS_PER_PAGE'],
 		error_out=False)
-	users=[{'timestamp':item.last_seen,'username':item.username,'role':item.role.name} for item in pagination.items]
+	users=[{'timestamp':item.last_seen,'username':item.username,'role':item.role.name,'avatar':item.avatar} for item in pagination.items]
 	return render_template('moderate_users.html',endpoint='.moderate_users',
 		pagination=pagination,users=users)
 
