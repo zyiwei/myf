@@ -12,7 +12,7 @@ Flasky搭建的校园信息交互网站
 #### 具体见功能介绍动图
 
 
-## 环境搭建（MacOS)
+## 环境搭建（MacOS,Ubuntu16.04亲测有效)
 #### 1.创建virtualenv
 检查系统是否安装virtualenv:
 $virtualenv --version
@@ -25,7 +25,8 @@ $git clone https://github.com/miguelgrinberg/myf.git
 
 #### 3.在myf_master文件夹中创建虚拟环境
 进入下载的文件目录:
-$cd myf_master
+$cd myf
+或$cd myf_master
 
 将创建的虚拟环境命名为venv:
 $virtualenv venv
@@ -56,4 +57,4 @@ $source venv/bin/activate
     邮箱：mod3@example.com 密码：mod6
 
 #### 6.运行程序
-(venv)$python manage.py
+(venv)$python manage.py runserver
